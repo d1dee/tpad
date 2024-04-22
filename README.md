@@ -22,7 +22,7 @@ To use the program, you need to provide the following arguments:
 5. Navigate to the out folder.
 6. Run the program by executing node index.js with the appropriate arguments mentioned above.
 
-<a href="sample.xlsx"> <h2>Sample Excel File <img src="xlsx_icon.png" height="20" alt="excel icon"></h2> </a>
+[<h2>Sample Excel File <img src="xlsx_icon.png" height="20" alt="excel icon"></h2>](sample.xlsx)
 
 ### Note
 This program is written in TypeScript. If you make any changes to the TypeScript files, make sure to rebuild the project
