@@ -2,14 +2,7 @@ import { AxiosInstance } from "axios"
 import qs from "qs"
 import { awaits, exponentialBackoff } from "./utils"
 import { WeeklyAttendance } from "../index"
-import { formatISO } from "date-fns"
-
-type Code = string
-type Remarks = string
-type Week = string
-type TobeTaught = string
-type LessonsTaught = string
-type LessonsRecovered = string
+import { format, formatISO } from "date-fns"
 
 // Loop for each teacher
 export default async function observePerWeek(
@@ -33,7 +26,7 @@ export default async function observePerWeek(
             teacher: teacherAttendance.code,
             term: teacherAttendance.term,
             to_be_taught: teacherAttendance.tobeTaught,
-            week_ending: date,
+            week_ending: format(date, "yyyy-MM-dd"),
             year: new Date().getFullYear(),
         })
         const config = {
