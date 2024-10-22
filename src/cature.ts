@@ -1,13 +1,13 @@
-import axios, { AxiosError, AxiosInstance } from "axios"
+import axios, {AxiosError, AxiosInstance} from "axios"
 import qs from "qs"
-import { writeFileSync } from "fs"
+import {writeFileSync} from "fs"
 import observePerWeek from "./observe"
-import { parse } from "node-html-parser"
-import { DEBUG } from "./constants"
-import { LoginData, WeeklyAttendance } from "../index"
-import { exponentialBackoff } from "./utils"
-import { inspect } from "node:util"
-import { existsSync, mkdirSync } from "node:fs"
+import {parse} from "node-html-parser"
+import {DEBUG} from "./constants"
+import {LoginData, WeeklyAttendance} from "../index"
+import {exponentialBackoff} from "./utils"
+import {inspect} from "node:util"
+import {existsSync, mkdirSync} from "node:fs"
 
 const HEADERS = {
     "sec-ch-ua": '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
@@ -27,7 +27,7 @@ const HEADERS = {
 }
 
 // Login and return institutions ippd_code
-const login = async (loginData: LoginData, axiosInstance: AxiosInstance) => {
+async function login(loginData: LoginData, axiosInstance: AxiosInstance) {
     try {
         let homepageRes = await axiosInstance.get("/")
 
@@ -38,7 +38,7 @@ const login = async (loginData: LoginData, axiosInstance: AxiosInstance) => {
             process.exit(1)
         }
 
-        Object.assign(HEADERS, { cookie: cookies.join("; ") })
+        Object.assign(HEADERS, {cookie: cookies.join("; ")})
 
         const loginConfig = {
             method: "post",
@@ -49,9 +49,31 @@ const login = async (loginData: LoginData, axiosInstance: AxiosInstance) => {
         }
         let loginRes = await axiosInstance.request(loginConfig)
 
-        let table = parse(loginRes.data).querySelector(
+        if (!loginRes.data) {
+            console.error("No response body was received after login.")
+            process.exit(1)
+        }
+
+
+        let body = parse(loginRes?.data)
+        if (!body) {
+            console.error("No response body was received after login.")
+            process.exit(1)
+        }
+
+        if (body.querySelector('#over_bg > div > div:nth-child(4) > div:nth-child(2) > div > div.alert.alert-danger')) {
+            console.error('Invalid credentials were supplied. Kindly check supplied username and password.')
+            process.exit(1)
+        }
+
+        let table = body.querySelector(
             "#main-wrapper > div > div > div.row.page-titles > div > div:nth-child(2) > div > div > div",
         )
+
+        if (!table) {
+            console.error('Could not get user table details. Are you your login details are correct?')
+            process.exit(1)
+        }
 
         console.log(
             [
@@ -63,17 +85,23 @@ const login = async (loginData: LoginData, axiosInstance: AxiosInstance) => {
             ].join("\n\t"),
         )
 
-        DEBUG &&
-            (() => {
-                if (!existsSync("./debug")) mkdirSync("./debug")
-                writeFileSync("./debug/index.html", loginRes?.data)
-            })()
+        if (DEBUG) {
+            if (!existsSync("./debug")) mkdirSync("./debug")
+            writeFileSync("./debug/index.html", loginRes?.data)
+        }
 
-        return table
+        const ippd_code = table
             ?.querySelector("tr:nth-child(1) > td:nth-child(2)")
-            ?.structuredText?.split(":")
-            ?.pop()
+            ?.structuredText?.split(":")?.pop()
             ?.trim()
+
+        if (!ippd_code) {
+            console.error('Could not parse IPPD CODE from the page. Try again later.')
+            process.exit(1)
+        }
+
+        return ippd_code
+
     } catch (err: any) {
         if (err instanceof AxiosError) {
             throw err
@@ -85,16 +113,13 @@ const login = async (loginData: LoginData, axiosInstance: AxiosInstance) => {
     }
 }
 
-export default async (loginData: LoginData, weeklyAttendance: Array<WeeklyAttendance>) => {
+export default async function (loginData: LoginData, weeklyAttendance: Array<WeeklyAttendance>) {
     try {
-        const axiosInstance = axios.create({ baseURL: "https://tpad2.tsc.go.ke", timeout: 30000 })
+        const axiosInstance = axios.create({baseURL: "https://tpad2.tsc.go.ke", timeout: 30000})
 
         DEBUG && console.debug(`Login in with the provided details: ${inspect(loginData)} `)
 
         let ippd_code = await exponentialBackoff(login, loginData, axiosInstance)
-
-        // Fail no ipd_code since we can not continue without it
-        if (!ippd_code) throw new Error("Failed to get ippd_code from the home page.")
 
         // Loop through each teacher observing
         for await (const teachersAttendance of weeklyAttendance) {
